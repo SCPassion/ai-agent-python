@@ -3,7 +3,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from prompts import system_prompt
+from functions.get_files_info import config
 import sys
+
 
 def main():
     load_dotenv()
@@ -34,8 +36,9 @@ def main():
     
 
 def generate_content(client, messages, verbose):
-    response = client.models.generate_content(model="gemini-2.0-flash-001", contents=messages, config=types.GenerateContentConfig(system_instruction=system_prompt))
+    response = client.models.generate_content(model="gemini-2.0-flash-001", contents=messages, config=config)
     text = response.text
+    function_calls = response.function_calls;
     usage = response.usage_metadata
 
     if verbose:
@@ -43,7 +46,12 @@ def generate_content(client, messages, verbose):
         print(f"Response tokens: {usage.candidates_token_count}")
 
     print("Response:")
-    print(text)
+    if not function_calls:
+        print(response.text)
+        return text
+    else:
+        for function_call in function_calls:
+            print(f"Calling function: {function_call.name}({function_call.args})")
 
 if __name__ == "__main__":
     main()
