@@ -36,31 +36,61 @@ def main():
     
 
 def generate_content(client, messages, verbose):
-    
-    response = client.models.generate_content(model="gemini-2.0-flash-001", 
-                                              contents=messages, 
-                                              config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt))
-    text = response.text
-    function_calls = response.function_calls;
-    usage = response.usage_metadata
+    iteration = 0
+    max_iterations = 20  # Limit to prevent infinite loops
+    final_response_text = None
+    while iteration < max_iterations:
+        try:    
+            response = client.models.generate_content(model="gemini-2.0-flash-001", 
+                                                    contents=messages, 
+                                                    config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt))
+        except Exception as e:
+            print(f"Error generating content: {e}")
+            return None
+        candidates = response.candidates
+        for candidate in candidates:
+            messages.append(candidate.content)
+        
+        function_calls = response.function_calls
+        usage = response.usage_metadata
 
-    if verbose:
-        print(f"Prompt tokens: {usage.prompt_token_count}")
-        print(f"Response tokens: {usage.candidates_token_count}")
+        if verbose:
+            print(f"Prompt tokens: {usage.prompt_token_count}")
+            print(f"Response tokens: {usage.candidates_token_count}")
 
-    print("Response:")
-    if not function_calls:
-        print(response.text)
-        return text
-    else:
-        for function_call in function_calls:
-            function_result = call_function(function_call, verbose)
-            if not function_result.parts[0].function_response.response:
-                raise Exception(f"Function call failed: {function_call.name} with args {function_call.args}")
-            if verbose:
-                print(f"-> {function_result.parts[0].function_response.response}")
+        if not function_calls:
+            final_response_text = response.text
+            break
+        else:
+            for function_call in function_calls:
+                function_result = call_function(function_call, verbose)
+                if not function_result.parts[0].function_response.response:
+                    raise Exception(f"Function call failed: {function_call.name} with args {function_call.args}")
+                if verbose:
+                    print(f"-> {function_result.parts[0].function_response.response}")
 
-            print(f"Calling function: {function_call.name}({function_call.args})")
+                #print(f"Calling function: {function_call.name}({function_call.args})")
+                messages.append(types.Content(
+                    role="tool",
+                    parts=[
+                        types.Part.from_function_response(
+                            name=function_call.name,
+                            response=function_result.parts[0].function_response.response,
+                        )
+                    ],
+                )
+                )
+
+        iteration += 1
+
+        
+    if iteration >= max_iterations:
+            print("Max iterations reached. Stopping agent.")
+
+    if final_response_text:
+        print("\nFinal response:")
+        print(final_response_text)
+        return final_response_text
 
 if __name__ == "__main__":
     main()

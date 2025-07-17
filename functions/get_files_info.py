@@ -1,10 +1,10 @@
 import os
-from prompts import system_prompt
 from google.genai import types
 
 def get_files_info(working_directory, directory=None):
 
-    full_path = os.path.join(working_directory, directory)
+    full_path = os.path.join(working_directory, directory) if directory else working_directory
+
     abs_path = os.path.abspath(full_path)
 
     if not abs_path.startswith(os.path.abspath(working_directory)):
